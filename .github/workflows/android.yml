@@ -29,6 +29,15 @@ jobs:
         run: |
           chmod +x gradlew
           sdkmanager 'platforms;android-35' 'build-tools;36.0.0'
+      - name: Prepare debug signing key for tests
+        run: |
+          mkdir -p "$HOME/.android"
+          if [ ! -f "$HOME/.android/debug.keystore" ]; then
+            keytool -genkeypair -keystore "$HOME/.android/debug.keystore" \
+              -storepass android -keypass android -alias androiddebugkey \
+              -dname "CN=Android Debug,O=Android,C=US" \
+              -keyalg RSA -keysize 2048 -validity 10000 -noprompt
+          fi
       - name: Unit tests, lint and debug APK
         run: ./gradlew testDebugUnitTest lintDebug assembleDebug --no-daemon
       - name: Create signed test APKs

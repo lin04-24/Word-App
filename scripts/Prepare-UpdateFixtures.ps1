@@ -10,7 +10,7 @@ $signerSuffix = if ($IsWindows) { '.bat' } else { '' }
 $aapt = Join-Path $Sdk "build-tools/36.0.0/aapt$suffix"
 $signer = Join-Path $Sdk "build-tools/36.0.0/apksigner$signerSuffix"
 $androidJar = Join-Path $Sdk 'platforms\android-35\android.jar'
-$profilePath = if ($env:USERPROFILE) { $env:USERPROFILE } else { $env:HOME }
+$profilePath = if ($IsWindows -and $env:USERPROFILE) { $env:USERPROFILE } elseif ($env:HOME) { $env:HOME } else { $env:USERPROFILE }
 $debugKey = Join-Path $profilePath '.android/debug.keystore'
 if (-not (Test-Path $debugKey)) { throw 'Run assembleDebug first to create the Android debug keystore.' }
 $wrongKey = Join-Path $output 'fixture.keystore'
