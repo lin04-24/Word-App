@@ -4,3 +4,10 @@
 local.properties
 .idea/
 *.iml
+keystore.properties
+*.jks
+*.keystore
+*.p12
+*.pfx
+.test-tools/
+app/src/androidTest/assets/update-*.apk*

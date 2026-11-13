@@ -10,6 +10,28 @@
 4. 导入后逐个点击词条填写中文释义。释义保存后，单词即可进入待复习列表。
 5. 开始默写，输入英文并检查答案。答错的词会在本轮队尾再次出现，直到答对。
 
+## v0.2 客户端更新
+
+- 首页右上角“设置”中可以手动检查更新，并开关“启动时检查更新”（默认开启）。每次应用冷启动自动检查一次；无新版本或网络失败时不弹窗，手动检查会显示结果。
+- 更新检查读取 `lin04-24/Word-App` 的 GitHub 最新正式 Release；支持 `v0.2`、`0.2.0` 和 SemVer 预发布排序。发现更新后展示更新日志、版本和文件大小，点击“下载更新”后才下载。
+- 安装包由 Android 下载服务在后台下载，客户端显示进度，支持取消、重新下载和应用重启后继续查看任务。无需打开浏览器或在公共下载目录寻找 APK。
+- 下载后检查 SHA-256、包名、签名和版本。前台下载弹窗保持打开时，校验通过后进入系统安装界面；后台完成时返回客户端点击“立即安装”。首次更新需在系统页面允许默词安装应用，取消授权或安装后可再次继续。
+- 只访问 GitHub API、GitHub Release 资产及其 HTTPS 下载服务，不上传词库或作答记录。关闭启动检查后，仅手动检查及用户确认下载时联网；无需 GitHub Token 或公共存储访问权限。
+- v0.1 没有客户端更新模块，需要先从 GitHub Release 安装一次 v0.2，之后即可在客户端获取后续版本。覆盖安装保留词库和复习记录，发布时必须沿用相同包名及签名证书。
+
+## 正式构建与后续发布
+
+当前版本：`versionName 0.2`、`versionCode 2`，包名 `com.example.moci`，最低 Android 8.0。
+
+在本机配置以下环境变量，再执行 `./gradlew.bat :app:assembleRelease`：
+
+- `WORD_APP_RELEASE_STORE_FILE`：发布 keystore 的路径
+- `WORD_APP_RELEASE_STORE_PASSWORD`：密钥库密码
+- `WORD_APP_RELEASE_KEY_ALIAS`：发布密钥别名
+- `WORD_APP_RELEASE_KEY_PASSWORD`：私钥密码
+
+签名材料仅在本机配置，不提交 keystore 或密码。每次发布递增 `versionCode` 和版本号，创建正式标签及 Release，上传单个通用 APK `Word-App-v<版本>.apk` 与 `SHA256SUMS`。客户端优先使用 GitHub 资产的 SHA-256 digest；缺失时读取同一 Release 的校验文件，校验信息缺失时不安装。
+
 ## 复习规则
 
 成功回忆后按 12 小时、1 天、2 天、4 天、7 天、15 天递增复习间隔；之后每升一级增加 3 天。答错会降低一级，并在当前练习轮次稍后重试。单词保存当前等级和下次复习时间，每次作答另行记录正误、耗时和时间戳；耗时目前不参与间隔计算。
@@ -19,6 +41,9 @@
 ```powershell
 ./gradlew.bat testDebugUnitTest assembleDebug
 ./gradlew.bat compileDebugAndroidTestKotlin
+./gradlew.bat lintDebug
 ```
 
 设备端 Room 持久化与首页界面测试位于 `app/src/androidTest`，可在连接 Android 设备或启动模拟器后通过 Android Studio 运行。
+
+更新下载与系统安装测试使用本机回环 HTTP 服务及独立签名夹具，不发布测试 Release。先运行 `./scripts/Prepare-UpdateFixtures.ps1`，再运行 `./gradlew.bat connectedDebugAndroidTest`；脚本需要 SDK 35、build-tools 36.0.0 和已有的 Android debug keystore。生成的测试 APK、测试 keystore 和 `.test-tools` 不纳入 Git。仅 debug 构建允许回环地址的 HTTP，正式构建始终限制明文网络。

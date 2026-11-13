@@ -54,6 +54,10 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.moci.data.WordEntity
+import com.example.moci.update.AndroidUpdateServices
+import com.example.moci.update.UpdateHost
+import com.example.moci.update.UpdateSettingsScreen
+import com.example.moci.update.UpdateViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.InputStreamReader
@@ -74,6 +78,9 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun MociApp(viewModel: MainViewModel = viewModel()) {
     val context = LocalContext.current
+    val updateViewModel: UpdateViewModel = viewModel(factory = remember { AndroidUpdateServices.factory(context) })
+    val updateState by updateViewModel.state.collectAsState()
+    var showSettings by rememberSaveable { mutableStateOf(false) }
     val words by viewModel.words.collectAsState()
     val session by viewModel.session.collectAsState()
     val message by viewModel.message.collectAsState()
@@ -93,7 +100,15 @@ private fun MociApp(viewModel: MainViewModel = viewModel()) {
         }
     }
 
-    if (session != null) {
+    if (showSettings) {
+        UpdateSettingsScreen(
+            state = updateState,
+            onBack = { showSettings = false },
+            onAutoCheckChanged = updateViewModel::setAutoCheck,
+            onCheck = { updateViewModel.check() },
+            onOpenUpdate = updateViewModel::openDialog,
+        )
+    } else if (session != null) {
         ReviewScreen(
             session = session!!,
             snackbarHostState = snackbarHostState,
@@ -108,8 +123,11 @@ private fun MociApp(viewModel: MainViewModel = viewModel()) {
             onImport = { importLauncher.launch(arrayOf("text/plain", "application/octet-stream")) },
             onStart = viewModel::beginReview,
             onEditWord = { editingWord = it },
+            onSettings = { showSettings = true },
         )
     }
+
+    UpdateHost(updateViewModel, updateState, mayPrompt = session == null && editingWord == null)
 
     editingWord?.let { word ->
         MeaningDialog(
@@ -131,13 +149,14 @@ private fun HomeScreen(
     onImport: () -> Unit,
     onStart: () -> Unit,
     onEditWord: (WordEntity) -> Unit,
+    onSettings: () -> Unit,
 ) {
     val now = System.currentTimeMillis()
     val dueCount = words.count { it.meaning.isNotBlank() && it.nextReviewAt <= now }
     val missingMeaning = words.count { it.meaning.isBlank() }
 
     Scaffold(
-        topBar = { TopAppBar(title = { Text("默词") }) },
+        topBar = { TopAppBar(title = { Text("默词") }, actions = { TextButton(onClick = onSettings) { Text("设置") } }) },
         snackbarHost = { SnackbarHost(snackbarHostState) },
     ) { padding ->
         Column(
