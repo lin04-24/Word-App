@@ -57,12 +57,15 @@ fun UpdateSettingsScreen(
     onAutoCheckChanged: (Boolean) -> Unit,
     onCheck: () -> Unit,
     onOpenUpdate: () -> Unit,
+    snackbarHost: @Composable () -> Unit = {},
+    learningContent: @Composable () -> Unit = {},
 ) {
     BackHandler(onBack = onBack)
     Scaffold(topBar = {
         TopAppBar(title = { Text("设置") }, navigationIcon = { TextButton(onClick = onBack) { Text("返回") } })
-    }) { padding ->
+    }, snackbarHost = snackbarHost) { padding ->
         Column(Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
+            learningContent()
             Text("应用更新", style = MaterialTheme.typography.titleLarge)
             Text("当前版本：${BuildConfig.VERSION_NAME}")
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {

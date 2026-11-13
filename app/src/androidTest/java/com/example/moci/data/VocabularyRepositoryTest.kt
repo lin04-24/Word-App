@@ -15,6 +15,81 @@ import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 class VocabularyRepositoryTest {
     @Test
+    fun renameKeepsHistoryAndDeleteRemovesLinkedRecordsTransactionally() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val databaseName = "moci-edit-test-${System.nanoTime()}.db"
+        try {
+            val database = openDatabase(context, databaseName)
+            val repository = VocabularyRepository(database)
+            try {
+                repository.saveWord(null, "苹果", "fruit")
+                throw AssertionError("a manually entered word should use English spelling")
+            } catch (e: IllegalArgumentException) { assertTrue(e.message!!.contains("英文单词")) }
+            repository.saveWord(null, "Apple", "蘋果")
+            val inserted = database.wordDao().getByKey("apple")!!
+            repository.recordAnswer(inserted, correct = false, elapsedMillis = 500)
+            val originalLog = database.wordDao().getReviewLogs("apple").single()
+
+            repository.saveWord("apple", "Pear", "梨")
+            val renamed = database.wordDao().getByKey("pear")!!
+            assertEquals(1, renamed.attempts)
+            assertEquals(0, renamed.correctCount)
+            assertEquals(listOf("pear"), database.wordDao().getReviewLogs("pear").map { it.normalizedWord })
+            assertEquals("apple", originalLog.normalizedWord)
+
+            try {
+                repository.saveWord(null, "Pearl", "珍珠")
+                repository.saveWord("pear", "Pearl", "重复")
+                throw AssertionError("duplicate word must be rejected")
+            } catch (e: IllegalArgumentException) { assertTrue(e.message!!.contains("已存在")) }
+
+            repository.resetProgress("pear")
+            val reset = database.wordDao().getByKey("pear")!!
+            assertEquals(0, reset.level)
+            assertEquals(0L, reset.nextReviewAt)
+            assertEquals(1, database.wordDao().getReviewLogs("pear").size)
+            repository.deleteWords(listOf("pear"))
+            assertEquals(null, database.wordDao().getByKey("pear"))
+            assertTrue(database.wordDao().getReviewLogs("pear").isEmpty())
+            database.close()
+        } finally { context.deleteDatabase(databaseName) }
+    }
+
+    @Test
+    fun validatedBackupRestoresCompleteSnapshotAndRejectedBackupLeavesDataUntouched() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val databaseName = "moci-backup-test-${System.nanoTime()}.db"
+        try {
+            val database = openDatabase(context, databaseName)
+            val repository = VocabularyRepository(database)
+            repository.saveWord(null, "Apple", "蘋果")
+            repository.saveWord(null, "Book", "書")
+            val apple = database.wordDao().getByKey("apple")!!
+            repository.recordAnswer(apple, correct = true, elapsedMillis = 820)
+            val backup = repository.backup(200)
+            val expectedWords = backup.snapshot.words.associateBy { it.normalizedWord }
+            val expectedLogs = backup.snapshot.logs
+
+            repository.saveWord(null, "Pear", "梨")
+            val invalid = backup.copy(snapshot = backup.snapshot.copy(logs = emptyList()))
+            try {
+                repository.restore(invalid)
+                throw AssertionError("a backup with mismatched answer totals must be rejected")
+            } catch (e: IllegalArgumentException) { assertTrue(e.message!!.contains("累计数据")) }
+            assertNotNull(database.wordDao().getByKey("pear"))
+
+            repository.restore(BackupCodec.decode(BackupCodec.encode(backup)))
+            assertEquals(expectedWords, database.wordDao().getAll().associateBy { it.normalizedWord })
+            assertEquals(expectedLogs, database.wordDao().getAllLogs())
+            assertEquals(null, database.wordDao().getByKey("pear"))
+            repository.restore(VocabularyBackup(300, VocabularySnapshot()))
+            assertTrue(database.wordDao().getAll().isEmpty())
+            assertTrue(database.wordDao().getAllLogs().isEmpty())
+            database.close()
+        } finally { context.deleteDatabase(databaseName) }
+    }
+
+    @Test
     fun importsAreIdempotentMissingMeaningsStayOutOfReviewAndRecordsPersist() = runBlocking {
         val context = ApplicationProvider.getApplicationContext<Context>()
         val databaseName = "moci-test-${System.nanoTime()}.db"

@@ -1,335 +1,153 @@
 package com.example.moci
 
-import android.net.Uri
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
+import androidx.compose.foundation.layout.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.input.KeyboardCapitalization
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.example.moci.data.WordEntity
-import com.example.moci.update.AndroidUpdateServices
-import com.example.moci.update.UpdateHost
-import com.example.moci.update.UpdateSettingsScreen
-import com.example.moci.update.UpdateViewModel
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
-import java.io.InputStreamReader
+import com.example.moci.data.PracticeMode
+import com.example.moci.update.*
+import kotlinx.coroutines.delay
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContent {
-            MaterialTheme {
-                Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-                    MociApp()
-                }
-            }
-        }
+        setContent { MaterialTheme { Surface(Modifier.fillMaxSize()) { MociApp() } } }
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun MociApp(viewModel: MainViewModel = viewModel()) {
     val context = LocalContext.current
     val updateViewModel: UpdateViewModel = viewModel(factory = remember { AndroidUpdateServices.factory(context) })
-    val updateState by updateViewModel.state.collectAsState()
-    var showSettings by rememberSaveable { mutableStateOf(false) }
-    val words by viewModel.words.collectAsState()
-    val session by viewModel.session.collectAsState()
-    val message by viewModel.message.collectAsState()
-    var editingWord by remember { mutableStateOf<WordEntity?>(null) }
-    val snackbarHostState = remember { SnackbarHostState() }
-
-    val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
-        if (uri != null) {
-            viewModel.readAndImport(context, uri)
-        }
+    val updateState by updateViewModel.state.collectAsStateWithLifecycle()
+    val state by viewModel.learning.collectAsStateWithLifecycle()
+    val session by viewModel.session.collectAsStateWithLifecycle()
+    val message by viewModel.message.collectAsStateWithLifecycle()
+    val goal by viewModel.dailyGoal.collectAsStateWithLifecycle()
+    val busy by viewModel.busy.collectAsStateWithLifecycle()
+    val editor by viewModel.editor.collectAsStateWithLifecycle()
+    val detailKey by viewModel.detailKey.collectAsStateWithLifecycle()
+    val confirmation by viewModel.confirmation.collectAsStateWithLifecycle()
+    val preview by viewModel.backupPreview.collectAsStateWithLifecycle()
+    var tab by rememberSaveable { mutableStateOf(0) }
+    var settings by rememberSaveable { mutableStateOf(false) }
+    val snackbar = remember { SnackbarHostState() }
+    val appContext = context.applicationContext
+    val import = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        uri?.let { viewModel.readAndImport(appContext, it) }
     }
-
+    val export = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/plain")) { uri ->
+        uri?.let { viewModel.exportFile(appContext, it, false) }
+    }
+    val backup = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+        uri?.let { viewModel.exportFile(appContext, it, true) }
+    }
+    val restore = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        uri?.let { viewModel.previewBackup(appContext, it) }
+    }
+    val onImport = { import.launch(arrayOf("text/plain", "application/octet-stream")) }
     LaunchedEffect(message) {
-        if (message != null) {
-            snackbarHostState.showSnackbar(message!!)
-            viewModel.consumeMessage()
-        }
+        message?.let { viewModel.consumeMessage(); snackbar.showSnackbar(it) }
     }
+    val owner = LocalLifecycleOwner.current
+    DisposableEffect(owner, viewModel) {
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context?, intent: Intent?) { viewModel.refreshTime() }
+        }
+        val filter = IntentFilter().apply {
+            addAction(Intent.ACTION_DATE_CHANGED)
+            addAction(Intent.ACTION_TIME_CHANGED)
+            addAction(Intent.ACTION_TIMEZONE_CHANGED)
+        }
+        ContextCompat.registerReceiver(context, receiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
+        val observer = LifecycleEventObserver { _, event -> if (event == Lifecycle.Event.ON_RESUME) viewModel.refreshTime() }
+        owner.lifecycle.addObserver(observer)
+        onDispose { context.unregisterReceiver(receiver); owner.lifecycle.removeObserver(observer) }
+    }
+    LaunchedEffect(viewModel, settings) { if (!settings) while (true) { viewModel.refreshTime(); delay(30_000) } }
 
-    if (showSettings) {
-        UpdateSettingsScreen(
-            state = updateState,
-            onBack = { showSettings = false },
-            onAutoCheckChanged = updateViewModel::setAutoCheck,
-            onCheck = { updateViewModel.check() },
-            onOpenUpdate = updateViewModel::openDialog,
-        )
+    BackHandler(enabled = !settings && session == null && (detailKey != null || tab != 0)) {
+        if (detailKey != null) viewModel.showDetail(null) else tab = 0
+    }
+    val detail = state.snapshot.words.find { it.normalizedWord == detailKey }
+    if (settings) {
+        UpdateSettingsScreen(updateState, { settings = false }, updateViewModel::setAutoCheck,
+            { updateViewModel.check() }, updateViewModel::openDialog, snackbarHost = { SnackbarHost(snackbar) }) {
+            LearningSettings(goal, busy, viewModel::setDailyGoal,
+                { backup.launch("默词备份-${state.today}.json") },
+                { restore.launch(arrayOf("application/json", "text/plain", "application/octet-stream")) })
+        }
     } else if (session != null) {
-        ReviewScreen(
-            session = session!!,
-            snackbarHostState = snackbarHostState,
-            onBack = viewModel::endReview,
-            onSubmit = viewModel::submitAnswer,
-            onContinue = viewModel::continueReview,
-        )
+        BackHandler { if (session?.isSubmitting != true) viewModel.endReview() }
+        ReviewScreen(session!!, snackbar, viewModel::endReview, viewModel::submitAnswer, viewModel::continueReview)
     } else {
-        HomeScreen(
-            words = words,
-            snackbarHostState = snackbarHostState,
-            onImport = { importLauncher.launch(arrayOf("text/plain", "application/octet-stream")) },
-            onStart = viewModel::beginReview,
-            onEditWord = { editingWord = it },
-            onSettings = { showSettings = true },
-        )
-    }
-
-    UpdateHost(updateViewModel, updateState, mayPrompt = session == null && editingWord == null)
-
-    editingWord?.let { word ->
-        MeaningDialog(
-            word = word,
-            onDismiss = { editingWord = null },
-            onSave = { meaning ->
-                viewModel.saveMeaning(word.normalizedWord, meaning)
-                editingWord = null
+        Scaffold(
+            topBar = {
+                TopAppBar(title = { Text(if (detailKey != null) "单词详情" else listOf("默词", "我的词库", "学习统计")[tab]) },
+                    navigationIcon = { if (detailKey != null) TextButton(onClick = { viewModel.showDetail(null) }) { Text("返回") } },
+                    actions = { TextButton(onClick = { settings = true }, enabled = !busy) { Text("设置") } })
             },
-        )
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun HomeScreen(
-    words: List<WordEntity>,
-    snackbarHostState: SnackbarHostState,
-    onImport: () -> Unit,
-    onStart: () -> Unit,
-    onEditWord: (WordEntity) -> Unit,
-    onSettings: () -> Unit,
-) {
-    val now = System.currentTimeMillis()
-    val dueCount = words.count { it.meaning.isNotBlank() && it.nextReviewAt <= now }
-    val missingMeaning = words.count { it.meaning.isBlank() }
-
-    Scaffold(
-        topBar = { TopAppBar(title = { Text("默词") }, actions = { TextButton(onClick = onSettings) { Text("设置") } }) },
-        snackbarHost = { SnackbarHost(snackbarHostState) },
-    ) { padding ->
-        Column(
-            modifier = Modifier.fillMaxSize().padding(padding).padding(horizontal = 20.dp),
-        ) {
-            Spacer(Modifier.height(8.dp))
-            Text("看中文，写英文", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-            Spacer(Modifier.height(12.dp))
-            Card(modifier = Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(18.dp)) {
-                    Text("待复习", style = MaterialTheme.typography.titleMedium)
-                    Text("$dueCount", style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.Bold)
-                    Text("词库 ${words.size} 个 · 待补释义 $missingMeaning 个")
-                }
-            }
-            Spacer(Modifier.height(12.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
-                Button(onClick = onStart, enabled = dueCount > 0, modifier = Modifier.weight(1f)) {
-                    Text("开始默写")
-                }
-                OutlinedButton(onClick = onImport, modifier = Modifier.weight(1f)) {
-                    Text("导入 TXT")
-                }
-            }
-            Spacer(Modifier.height(16.dp))
-            Text("我的词库", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
-            Spacer(Modifier.height(8.dp))
-            if (words.isEmpty()) {
-                Text("导入 UTF-8 TXT 开始建立词库。")
-            } else {
-                LazyColumn(
-                    modifier = Modifier.weight(1f),
-                    contentPadding = PaddingValues(bottom = 24.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    items(words, key = { it.normalizedWord }) { word ->
-                        Card(onClick = { onEditWord(word) }, modifier = Modifier.fillMaxWidth()) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 13.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Column(Modifier.weight(1f)) {
-                                    Text(word.word, fontWeight = FontWeight.Medium)
-                                    Text(
-                                        word.meaning.ifBlank { "点击补充中文释义" },
-                                        color = if (word.meaning.isBlank()) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
-                                        style = MaterialTheme.typography.bodyMedium,
-                                    )
-                                }
-                                Text(if (word.meaning.isBlank()) "补释义" else "${word.attempts} 次")
-                            }
-                        }
+            snackbarHost = { SnackbarHost(snackbar) },
+            bottomBar = {
+                if (detailKey == null) NavigationBar {
+                    listOf("学习", "词库", "统计").forEachIndexed { index, label ->
+                        NavigationBarItem(selected = tab == index, onClick = { tab = index },
+                            icon = { Text(listOf("学", "词", "图")[index]) }, label = { Text(label) })
                     }
+                }
+            },
+        ) { padding ->
+            Column(Modifier.fillMaxSize().padding(padding)) {
+                if (busy || state.loading) LinearProgressIndicator(Modifier.fillMaxWidth())
+                when {
+                    detail != null -> WordDetailScreen(detail, state.snapshot.logs.filter { it.normalizedWord == detailKey }, state.zone, busy,
+                        { viewModel.openEditor(detail) }, { viewModel.requestDelete(listOf(detail.normalizedWord)) },
+                        { viewModel.requestReset(detail.normalizedWord) })
+                    detailKey != null -> Text(if (state.loading) "正在读取单词…" else "单词已移除，请返回词库", Modifier.padding(20.dp))
+                    tab == 0 -> LearningScreen(state, goal, busy, { viewModel.beginReview(PracticeMode.DUE) },
+                        { viewModel.beginReview(PracticeMode.WRONG) }, onImport, { tab = 1 })
+                    tab == 1 -> VocabularyScreen(state, busy, { viewModel.openEditor() }, onImport,
+                        { export.launch("默词词表-${state.today}.txt") }, viewModel::showDetail, viewModel::requestDelete)
+                    else -> StatisticsScreen(state, goal)
                 }
             }
         }
     }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun ReviewScreen(
-    session: ReviewSession,
-    snackbarHostState: SnackbarHostState,
-    onBack: () -> Unit,
-    onSubmit: (String) -> Unit,
-    onContinue: () -> Unit,
-) {
-    var answer by rememberSaveable(session.current?.normalizedWord, session.answer != null) { mutableStateOf("") }
-    val current = session.current
-
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("默写 · ${session.passed}/${session.initialCount}") },
-                navigationIcon = { TextButton(onClick = onBack) { Text("返回") } },
-            )
-        },
-        snackbarHost = { SnackbarHost(snackbarHostState) },
-    ) { padding ->
-        Column(
-            modifier = Modifier.fillMaxSize().padding(padding).padding(horizontal = 24.dp, vertical = 20.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Top,
-        ) {
-            when {
-                session.answer != null -> {
-                    val result = session.answer
-                    Spacer(Modifier.height(36.dp))
-                    Text(if (result.correct) "回答正确" else "再记一下", style = MaterialTheme.typography.headlineMedium, color = if (result.correct) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error)
-                    Spacer(Modifier.height(18.dp))
-                    Text("正确答案：${result.expectedWord}", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                    if (!result.correct) {
-                        Spacer(Modifier.height(8.dp))
-                        Text("你的答案：${result.enteredAnswer.ifBlank { "（未填写）" }}")
-                    }
-                    Spacer(Modifier.height(28.dp))
-                    Button(onClick = onContinue) {
-                        Text(if (session.queue.isEmpty()) "完成本轮" else "继续")
-                    }
-                }
-                current == null -> {
-                    Text("本轮完成", style = MaterialTheme.typography.headlineMedium)
-                    Text("答对 ${session.passed} 个 · 错误重练 ${session.mistakes} 次")
-                    Spacer(Modifier.height(24.dp))
-                    Button(onClick = onBack) { Text("返回词库") }
-                }
-                else -> {
-                    Text("${session.passed + 1} / ${session.initialCount} · 错误重练 ${session.mistakes} 次", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Spacer(Modifier.height(40.dp))
-                    Text(current.meaning, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.SemiBold)
-                    Spacer(Modifier.height(28.dp))
-                    OutlinedTextField(
-                        value = answer,
-                        onValueChange = { answer = it },
-                        modifier = Modifier.fillMaxWidth(),
-                        label = { Text("默写英文单词") },
-                        singleLine = true,
-                        enabled = !session.isSubmitting,
-                        keyboardOptions = KeyboardOptions(
-                            capitalization = KeyboardCapitalization.None,
-                            autoCorrectEnabled = false,
-                            keyboardType = KeyboardType.Text,
-                            imeAction = ImeAction.Done,
-                        ),
-                        keyboardActions = KeyboardActions(onDone = { if (answer.isNotBlank()) onSubmit(answer) }),
-                    )
-                    Spacer(Modifier.height(16.dp))
-                    Button(
-                        onClick = { onSubmit(answer) },
-                        enabled = answer.isNotBlank() && !session.isSubmitting,
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Text(if (session.isSubmitting) "保存中…" else "检查答案")
-                    }
-                    Spacer(Modifier.height(8.dp))
-                    TextButton(
-                        onClick = { onSubmit("") },
-                        enabled = !session.isSubmitting,
-                    ) {
-                        Text("想不起来")
-                    }
-                    if (session.isSubmitting) {
-                        Spacer(Modifier.height(8.dp))
-                        Text("正在保存作答…")
-                    }
-                }
-            }
-        }
+    editor?.let { WordEditorDialog(it, busy, viewModel::editDraft, viewModel::closeEditor, viewModel::saveEditor) }
+    confirmation?.let { action ->
+        AlertDialog(onDismissRequest = viewModel::dismissConfirmation,
+            title = { Text(if (action.reset) "重置复习安排？" else "删除 ${action.keys.size} 个单词？") },
+            text = { Text(if (action.reset) "等级回到初始并立即进入待复习。作答历史和累计次数保留。"
+                else "词条及其全部作答记录将一并删除，历史图表会重新统计。恢复需要使用已有备份。") },
+            confirmButton = { TextButton(onClick = viewModel::confirmWordAction, enabled = !busy) { Text(if (busy) "处理中…" else "确认") } },
+            dismissButton = { TextButton(onClick = viewModel::dismissConfirmation, enabled = !busy) { Text("取消") } })
     }
-}
-
-@Composable
-private fun MeaningDialog(
-    word: WordEntity,
-    onDismiss: () -> Unit,
-    onSave: (String) -> Unit,
-) {
-    var meaning by rememberSaveable(word.normalizedWord) { mutableStateOf(word.meaning) }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(word.word) },
-        text = {
-            OutlinedTextField(
-                value = meaning,
-                onValueChange = { meaning = it },
-                label = { Text("中文释义") },
-                placeholder = { Text("输入一个或多个释义") },
-                minLines = 2,
-            )
-        },
-        confirmButton = { TextButton(onClick = { onSave(meaning) }) { Text("保存") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
-    )
+    preview?.let { data ->
+        AlertDialog(onDismissRequest = viewModel::dismissBackup, title = { Text("覆盖恢复备份？") },
+            text = { Text("备份时间：${formatMoment(data.exportedAt, state.zone)}\n${data.snapshot.words.size} 个单词 · ${data.snapshot.logs.size} 条作答记录\n\n确认后将整体替换本机词库、复习进度和作答记录。每日目标及更新设置保留。") },
+            confirmButton = { TextButton(onClick = viewModel::restoreBackup, enabled = !busy) { Text(if (busy) "恢复中…" else "确认覆盖恢复") } },
+            dismissButton = { TextButton(onClick = viewModel::dismissBackup, enabled = !busy) { Text("取消") } })
+    }
+    UpdateHost(updateViewModel, updateState,
+        mayPrompt = session == null && editor == null && confirmation == null && preview == null && !busy)
 }
