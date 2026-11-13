@@ -23,6 +23,7 @@ class HomeScreenTest {
         composeRule.onNodeWithText("设置").performClick()
         composeRule.onNodeWithText("启动时检查更新").assertIsDisplayed()
         composeRule.onNodeWithText("返回").performClick()
+        composeRule.onNodeWithText("学习").performClick()
         composeRule.onNodeWithText("看中文，写英文").assertIsDisplayed()
     }
 
@@ -39,5 +40,7 @@ class HomeScreenTest {
         composeRule.onNodeWithText("设置").performClick()
         composeRule.onNodeWithText("每日目标（不同单词数）").assertIsDisplayed()
         composeRule.onNodeWithText("导出完整备份").assertIsDisplayed()
+        composeRule.onNodeWithText("返回").performClick()
+        composeRule.onNodeWithText("学习").performClick()
     }
 }
