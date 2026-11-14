@@ -134,11 +134,23 @@ private fun ChoiceMenu(label: String, options: List<String>, onChoice: (Int) -> 
 }
 
 @Composable
-internal fun WordEditorDialog(editor: WordEditor, busy: Boolean, onChange: (String, String) -> Unit, onClose: () -> Unit, onSave: () -> Unit) {
+internal fun WordEditorDialog(
+    editor: WordEditor,
+    busy: Boolean,
+    dictionaryAvailable: Boolean,
+    onChange: (String, String) -> Unit,
+    onClose: () -> Unit,
+    onSave: () -> Unit,
+    onLookupMeaning: () -> Unit,
+) {
     AlertDialog(onDismissRequest = onClose, title = { Text(if (editor.oldKey == null) "添加单词" else "编辑单词") },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 OutlinedTextField(editor.word, { onChange(it, editor.meaning) }, label = { Text("英文单词") }, singleLine = true, enabled = !busy)
+                OutlinedButton(onClick = onLookupMeaning, enabled = !busy && dictionaryAvailable) {
+                    Text("从离线词典填入释义")
+                }
+                if (!dictionaryAvailable) Text("在设置中下载离线词典后，可自动填入中文释义。", style = MaterialTheme.typography.bodySmall)
                 OutlinedTextField(editor.meaning, { onChange(editor.word, it) }, label = { Text("中文释义（可暂空）") }, minLines = 2, enabled = !busy)
                 Text("编辑默认保留复习安排和学习历史。", style = MaterialTheme.typography.bodySmall)
                 editor.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }

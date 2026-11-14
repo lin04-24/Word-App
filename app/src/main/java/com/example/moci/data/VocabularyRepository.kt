@@ -66,8 +66,8 @@ class VocabularyRepository(private val database: VocabularyDatabase) {
         }
     }
 
-    suspend fun importText(contents: String): ImportSummary {
-        val parsed = TxtImportParser.parse(contents)
+    suspend fun importText(contents: String, suggestedMeanings: Map<String, String> = emptyMap()): ImportSummary {
+        val parsed = TxtImportParser.parse(contents, suggestedMeanings)
         if (parsed.words.isEmpty()) return ImportSummary(uniqueWords = 0, addedWords = 0, inputLines = 0)
         val insertedIds = database.withTransaction { dao.insertAll(parsed.words) }
         return ImportSummary(

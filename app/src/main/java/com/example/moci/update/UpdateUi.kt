@@ -46,6 +46,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.example.moci.BuildConfig
+import com.example.moci.dictionary.EcdictDownloadState
 import kotlinx.coroutines.launch
 import java.util.Locale
 
@@ -58,6 +59,11 @@ fun UpdateSettingsScreen(
     onCheck: () -> Unit,
     onOpenUpdate: () -> Unit,
     snackbarHost: @Composable () -> Unit = {},
+    dictionaryState: EcdictDownloadState? = null,
+    onDictionaryDownload: () -> Unit = {},
+    onDictionaryCancel: () -> Unit = {},
+    dictionaryAutoFillOnImport: Boolean = true,
+    onDictionaryAutoFillChange: (Boolean) -> Unit = {},
     learningContent: @Composable () -> Unit = {},
 ) {
     BackHandler(onBack = onBack)
@@ -66,6 +72,10 @@ fun UpdateSettingsScreen(
     }, snackbarHost = snackbarHost) { padding ->
         Column(Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
             learningContent()
+            if (dictionaryState != null) {
+                OfflineDictionarySettings(dictionaryState, dictionaryAutoFillOnImport,
+                    onDictionaryAutoFillChange, onDictionaryDownload, onDictionaryCancel)
+            }
             Text("应用更新", style = MaterialTheme.typography.titleLarge)
             Text("当前版本：${BuildConfig.VERSION_NAME}")
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -93,6 +103,76 @@ fun UpdateSettingsScreen(
                 }
             }
             Text("检查更新和下载仅连接 GitHub 及其下载服务，不上传词库或作答记录。", style = MaterialTheme.typography.bodySmall)
+        }
+    }
+}
+
+@Composable
+private fun OfflineDictionarySettings(
+    state: EcdictDownloadState,
+    autoFillOnImport: Boolean,
+    onAutoFillOnImportChange: (Boolean) -> Unit,
+    onDownload: () -> Unit,
+    onCancel: () -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Text("离线英汉词典", style = MaterialTheme.typography.titleLarge)
+        if (state.isInstalled) {
+            Text("已下载 · ${state.installedVersion ?: "版本未知"} · ${formatUpdateSize(state.installedSizeBytes)} · ${state.installedEntryCount} 个词条")
+        } else {
+            Text("可选下载。下载后离线查词，并可在导入单词或编辑释义时自动填入中文解释。")
+        }
+        Text("数据来源：ECDICT（MIT License）。", style = MaterialTheme.typography.bodySmall)
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("TXT 导入时自动填入词典释义")
+                Text("关闭后导入本地空释义，之后仍可在编辑单词时选择填入词典释义。",
+                    style = MaterialTheme.typography.bodySmall)
+            }
+            Switch(
+                checked = autoFillOnImport,
+                onCheckedChange = onAutoFillOnImportChange,
+                modifier = Modifier.semantics { contentDescription = "TXT 导入自动填入词典释义开关" },
+            )
+        }
+        if (!state.configured) {
+            Text("词典服务尚未配置。", style = MaterialTheme.typography.bodySmall)
+        } else {
+            when {
+                state.verifying -> {
+                    LinearProgressIndicator(Modifier.fillMaxWidth())
+                    Text("下载完成，正在校验并导入词典…")
+                }
+                state.downloading -> {
+                    val total = state.manifest?.sizeBytes ?: 0L
+                    if (total > 0) {
+                        LinearProgressIndicator(
+                            progress = { (state.bytesDownloaded.toFloat() / total).coerceIn(0f, 1f) },
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                        Text("正在下载 ${((state.bytesDownloaded.toDouble() / total) * 100).toInt()}% · ${formatUpdateSize(state.bytesDownloaded)} / ${formatUpdateSize(total)}")
+                    } else {
+                        LinearProgressIndicator(Modifier.fillMaxWidth())
+                        Text("正在下载 · ${formatUpdateSize(state.bytesDownloaded)}")
+                    }
+                }
+                state.manifest != null -> Text(
+                    "云端版本 ${state.manifest.version} · ${formatUpdateSize(state.manifest.sizeBytes)} · ${state.manifest.entryCount} 个词条",
+                )
+            }
+            state.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+            when {
+                state.isBusy -> {
+                    if (state.downloading) TextButton(onClick = onCancel) { Text("取消下载") }
+                }
+                state.manifest == null -> Unit
+                state.updateAvailable -> Button(onClick = onDownload) { Text("下载词典更新") }
+                state.isInstalled -> Unit
+                else -> Button(onClick = onDownload) { Text("下载离线词典") }
+            }
+            if (state.isInstalled && state.manifest != null && !state.updateAvailable && !state.isBusy) {
+                Text("已是最新离线词典版本", style = MaterialTheme.typography.bodySmall)
+            }
         }
     }
 }

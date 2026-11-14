@@ -45,7 +45,7 @@ class UpdateInstallFlowTest {
         file.parentFile!!.mkdirs()
         file.writeBytes(bytes)
         val sha = MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
-        val release = ReleaseInfo("v0.3", "安装权限流程测试", "update-valid.apk", "https://example.test/update.apk", bytes.size.toLong(), sha, null)
+        val release = ReleaseInfo("v0.5", "安装权限流程测试", "update-valid.apk", "https://example.test/update.apk", bytes.size.toLong(), sha, null)
         val downloads = object : UpdateDownloads {
             override val state = MutableStateFlow<DownloadState>(DownloadState.Ready(release, file))
             override suspend fun restore() = Unit
@@ -68,7 +68,7 @@ class UpdateInstallFlowTest {
         }
         lateinit var model: UpdateViewModel
         compose.runOnUiThread {
-            model = UpdateViewModel(repository, downloads, preferences, StartupCheckGate(), "0.2")
+            model = UpdateViewModel(repository, downloads, preferences, StartupCheckGate(), BuildConfig.VERSION_NAME)
             store.put("update-test", model)
             model.openDialog()
         }

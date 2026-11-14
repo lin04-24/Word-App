@@ -28,8 +28,18 @@ android {
         applicationId = "com.example.moci"
         minSdk = 26
         targetSdk = 35
-        versionCode = 3
-        versionName = "0.3"
+        versionCode = 4
+        versionName = "0.4"
+
+        buildConfigField(
+            "String",
+            "ECDICT_DOWNLOAD_URL",
+            "\"https://pub-f37227ab855143b9a64b8b03ed053f5c.r2.dev/ecdict.sqlite\"",
+        )
+        buildConfigField("String", "ECDICT_VERSION", "\"2026-11-14\"")
+        buildConfigField("String", "ECDICT_SHA256", "\"eb2dfe8d8b6c4adbc5dc3c3c4033be6f2bb635e8231b600fed6effb08bdec24c\"")
+        buildConfigField("long", "ECDICT_SIZE_BYTES", "182648832L")
+        buildConfigField("int", "ECDICT_ENTRY_COUNT", "770611")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

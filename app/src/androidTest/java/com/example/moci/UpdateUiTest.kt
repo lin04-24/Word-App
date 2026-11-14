@@ -10,6 +10,9 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
+import com.example.moci.dictionary.EcdictDownloadState
+import com.example.moci.dictionary.EcdictManifest
 import com.example.moci.update.*
 import org.junit.Assert.assertEquals
 import org.junit.Rule
@@ -18,17 +21,27 @@ import java.io.File
 
 class UpdateUiTest {
     @get:Rule val compose = createComposeRule()
-    private val release = ReleaseInfo("v0.3", "更新说明：增加设置与后台下载", "Word-App-v0.3.apk", "https://github.com/lin04-24/Word-App/releases/download/v0.3/Word-App-v0.3.apk", 2_000_000, "a".repeat(64), null)
+    private val release = ReleaseInfo("v0.5", "更新说明：增加设置与后台下载", "Word-App-v0.5.apk", "https://github.com/lin04-24/Word-App/releases/download/v0.5/Word-App-v0.5.apk", 2_000_000, "a".repeat(64), null)
 
     @Test fun settingsToggleAndManualResultsAreVisible() {
         val state = mutableStateOf(UpdateUiState())
+        val autoFillOnImport = mutableStateOf(true)
         compose.setContent {
             MaterialTheme {
                 UpdateSettingsScreen(state.value, {}, { state.value = state.value.copy(autoCheckEnabled = it) },
-                    { state.value = state.value.copy(check = UpdateCheckState.Checking) }, {})
+                    { state.value = state.value.copy(check = UpdateCheckState.Checking) }, {},
+                    dictionaryState = EcdictDownloadState(
+                        configured = true,
+                        manifest = EcdictManifest("test", "https://dict.example.com/ecdict.sqlite", "a".repeat(64), 1000, 1),
+                    ),
+                    dictionaryAutoFillOnImport = autoFillOnImport.value,
+                    onDictionaryAutoFillChange = { autoFillOnImport.value = it },
+                )
             }
         }
-        compose.onNodeWithText("当前版本：0.2").assertIsDisplayed()
+        compose.onNodeWithText("当前版本：0.4").assertIsDisplayed()
+        compose.onNodeWithContentDescription("TXT 导入自动填入词典释义开关").assertIsOn().performClick().assertIsOff()
+        compose.onNodeWithText("下载离线词典").performScrollTo().assertIsDisplayed()
         compose.onNodeWithContentDescription("启动时检查更新开关").assertIsOn().performClick().assertIsOff()
         compose.onNodeWithText("检查更新").performClick()
         compose.onNodeWithText("检查中…").assertIsNotEnabled()

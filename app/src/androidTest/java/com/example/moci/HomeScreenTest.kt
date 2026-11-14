@@ -4,6 +4,7 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.onNodeWithTag
@@ -21,7 +22,9 @@ class HomeScreenTest {
         composeRule.onNodeWithText("导入 TXT").performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText("开始默写").assertIsDisplayed()
         composeRule.onNodeWithText("设置").performClick()
-        composeRule.onNodeWithText("启动时检查更新").assertIsDisplayed()
+        composeRule.onNodeWithText("启动时检查更新").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("离线英汉词典").assertIsDisplayed()
+        composeRule.onNodeWithText("下载离线词典").performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText("返回").performClick()
         composeRule.onNodeWithText("学习").performClick()
         composeRule.onNodeWithText("看中文，写英文").assertIsDisplayed()
@@ -32,6 +35,9 @@ class HomeScreenTest {
         composeRule.onNodeWithText("我的词库").assertDoesNotExist()
         composeRule.onNodeWithText("词库").performClick()
         composeRule.onNodeWithText("添加单词").assertIsDisplayed()
+        composeRule.onNodeWithText("添加单词").performClick()
+        composeRule.onNodeWithText("从离线词典填入释义").assertIsNotEnabled()
+        composeRule.onNodeWithText("取消").performClick()
         composeRule.onNodeWithText("导出 TXT").assertIsDisplayed()
         composeRule.onNodeWithText("统计").performClick()
         composeRule.onNodeWithText("掌握情况").assertIsDisplayed()

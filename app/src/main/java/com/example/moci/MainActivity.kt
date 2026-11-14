@@ -40,10 +40,12 @@ private fun MociApp(viewModel: MainViewModel = viewModel()) {
     val context = LocalContext.current
     val updateViewModel: UpdateViewModel = viewModel(factory = remember { AndroidUpdateServices.factory(context) })
     val updateState by updateViewModel.state.collectAsStateWithLifecycle()
+    val dictionaryState by viewModel.offlineDictionary.collectAsStateWithLifecycle()
     val state by viewModel.learning.collectAsStateWithLifecycle()
     val session by viewModel.session.collectAsStateWithLifecycle()
     val message by viewModel.message.collectAsStateWithLifecycle()
     val goal by viewModel.dailyGoal.collectAsStateWithLifecycle()
+    val dictionaryAutoFillOnImport by viewModel.dictionaryAutoFillOnImport.collectAsStateWithLifecycle()
     val busy by viewModel.busy.collectAsStateWithLifecycle()
     val editor by viewModel.editor.collectAsStateWithLifecycle()
     val detailKey by viewModel.detailKey.collectAsStateWithLifecycle()
@@ -92,7 +94,14 @@ private fun MociApp(viewModel: MainViewModel = viewModel()) {
     val detail = state.snapshot.words.find { it.normalizedWord == detailKey }
     if (settings) {
         UpdateSettingsScreen(updateState, { settings = false }, updateViewModel::setAutoCheck,
-            { updateViewModel.check() }, updateViewModel::openDialog, snackbarHost = { SnackbarHost(snackbar) }) {
+            { updateViewModel.check() }, updateViewModel::openDialog,
+            snackbarHost = { SnackbarHost(snackbar) },
+            dictionaryState = dictionaryState,
+            onDictionaryDownload = viewModel::downloadOfflineDictionary,
+            onDictionaryCancel = viewModel::cancelOfflineDictionaryDownload,
+            dictionaryAutoFillOnImport = dictionaryAutoFillOnImport,
+            onDictionaryAutoFillChange = viewModel::setDictionaryAutoFillOnImport,
+        ) {
             LearningSettings(goal, busy, viewModel::setDailyGoal,
                 { backup.launch("默词备份-${state.today}.json") },
                 { restore.launch(arrayOf("application/json", "text/plain", "application/octet-stream")) })
@@ -133,7 +142,10 @@ private fun MociApp(viewModel: MainViewModel = viewModel()) {
             }
         }
     }
-    editor?.let { WordEditorDialog(it, busy, viewModel::editDraft, viewModel::closeEditor, viewModel::saveEditor) }
+    editor?.let {
+        WordEditorDialog(it, busy, dictionaryState.isInstalled, viewModel::editDraft,
+            viewModel::closeEditor, viewModel::saveEditor, viewModel::lookupEditorMeaning)
+    }
     confirmation?.let { action ->
         AlertDialog(onDismissRequest = viewModel::dismissConfirmation,
             title = { Text(if (action.reset) "重置复习安排？" else "删除 ${action.keys.size} 个单词？") },

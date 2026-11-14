@@ -108,10 +108,14 @@ class VocabularyRepositoryTest {
             database.wordDao().update(mastered)
             repository.recordAnswer(mastered, correct = true, elapsedMillis = 850L)
 
-            val secondImport = repository.importText("Apple\npear\nplum\n")
+            val secondImport = repository.importText("Apple\npear\nplum\n", mapOf(
+                "apple" to "词典释义不可覆盖本地释义",
+                "plum" to "梅子",
+            ))
             assertEquals(3, secondImport.uniqueWords)
             assertEquals(1, secondImport.addedWords)
             assertEquals("苹果", database.wordDao().getByKey("apple")?.meaning)
+            assertEquals("梅子", database.wordDao().getByKey("plum")?.meaning)
             assertEquals(mastered.level + 1, database.wordDao().getByKey("apple")?.level)
             assertFalse(repository.dueWords(System.currentTimeMillis()).any { it.normalizedWord == "pear" })
 

@@ -34,7 +34,7 @@ class UpdateUpgradeSmokeTest {
         file.parentFile!!.mkdirs()
         file.writeBytes(bytes)
         val hash = MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
-        val release = ReleaseInfo("v0.3", "测试覆盖升级", "update-valid.apk", "https://example.test/update.apk", bytes.size.toLong(), hash, null)
+        val release = ReleaseInfo("v0.5", "测试覆盖升级", "update-valid.apk", "https://example.test/update.apk", bytes.size.toLong(), hash, null)
         AndroidApkVerifier(context).verify(file, release, hash)
         context.startActivity(updateInstallIntent(context, file).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         val device = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
@@ -52,5 +52,6 @@ class UpdateUpgradeSmokeTest {
         assertTrue(dao.getReviewLogs("updatesmoke").any { it.elapsedMillis == 1234L && it.correct })
         assertFalse(AndroidUpdatePreferences(context).autoCheckEnabled)
         File(context.getExternalFilesDir(null), "updates/upgrade-smoke.apk").delete()
+        Unit
     }
 }

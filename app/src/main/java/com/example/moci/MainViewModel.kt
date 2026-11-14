@@ -7,6 +7,9 @@ import android.os.SystemClock
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.SavedStateHandle
+import com.example.moci.dictionary.EcdictDictionary
+import com.example.moci.dictionary.EcdictDownloadManager
+import com.example.moci.dictionary.EcdictDownloadState
 import com.example.moci.data.ReviewQueue
 import com.example.moci.data.ReviewScheduler
 import com.example.moci.data.VocabularyDatabase
@@ -62,6 +65,9 @@ data class WordConfirmation(val reset: Boolean, val keys: List<String>)
 
 class MainViewModel(application: Application, private val savedState: SavedStateHandle) : AndroidViewModel(application) {
     private val repository = VocabularyRepository(VocabularyDatabase.getInstance(application))
+    private val dictionary = EcdictDictionary(application)
+    private val dictionaryDownloads = EcdictDownloadManager(application, viewModelScope)
+    val offlineDictionary: StateFlow<EcdictDownloadState> = dictionaryDownloads.state
     private val clock = MutableStateFlow(System.currentTimeMillis() to ZoneId.systemDefault())
     val learning = combine(repository.observeSnapshot(), clock) { snapshot, time ->
         LearningUiState(snapshot, LearningStatistics.daily(snapshot.logs, time.second),
@@ -71,6 +77,8 @@ class MainViewModel(application: Application, private val savedState: SavedState
     private val preferences = application.getSharedPreferences("learning", Context.MODE_PRIVATE)
     private val _dailyGoal = MutableStateFlow(preferences.getInt("daily_goal", 20).coerceAtLeast(1))
     val dailyGoal: StateFlow<Int> = _dailyGoal
+    private val _dictionaryAutoFillOnImport = MutableStateFlow(preferences.getBoolean("dictionary_autofill_on_import", true))
+    val dictionaryAutoFillOnImport: StateFlow<Boolean> = _dictionaryAutoFillOnImport
     private val _busy = MutableStateFlow(false)
     val busy: StateFlow<Boolean> = _busy
     private val _editor = MutableStateFlow<WordEditor?>(if (savedState.get<Boolean>("editor_open") == true)
@@ -83,6 +91,8 @@ class MainViewModel(application: Application, private val savedState: SavedState
     val backupPreview: StateFlow<VocabularyBackup?> = _backupPreview
 
     fun refreshTime() { clock.value = System.currentTimeMillis() to ZoneId.systemDefault() }
+    fun downloadOfflineDictionary() { dictionaryDownloads.download() }
+    fun cancelOfflineDictionaryDownload() { dictionaryDownloads.cancel() }
     fun showDetail(key: String?) { savedState["detail_key"] = key }
     fun openEditor(word: WordEntity? = null) { setEditor(WordEditor(word?.normalizedWord, word?.word ?: "", word?.meaning ?: "")) }
     fun closeEditor() { if (!_busy.value) setEditor(null) }
@@ -111,6 +121,22 @@ class MainViewModel(application: Application, private val savedState: SavedState
         }
     }
 
+    fun lookupEditorMeaning() {
+        val draft = _editor.value ?: return
+        if (draft.word.isBlank()) return
+        launchOperation {
+            val meaning = withContext(Dispatchers.IO) { dictionary.lookup(draft.word) }
+            val current = _editor.value ?: return@launchOperation
+            if (!current.word.equals(draft.word, ignoreCase = true)) return@launchOperation
+            if (meaning.isNullOrBlank()) {
+                _message.value = if (dictionary.isInstalled()) "词典中没有找到这个单词" else "请先在设置中下载离线词典"
+            } else {
+                setEditor(current.copy(meaning = meaning, error = null))
+                _message.value = "已填入词典释义，可继续编辑"
+            }
+        }
+    }
+
     fun requestDelete(keys: List<String>) { if (!_busy.value && keys.isNotEmpty()) _confirmation.value = WordConfirmation(false, keys.distinct()) }
     fun requestReset(key: String) { if (!_busy.value) _confirmation.value = WordConfirmation(true, listOf(key)) }
     fun dismissConfirmation() { if (!_busy.value) _confirmation.value = null }
@@ -131,6 +157,11 @@ class MainViewModel(application: Application, private val savedState: SavedState
         preferences.edit().putInt("daily_goal", goal).apply()
         _dailyGoal.value = goal
         return true
+    }
+
+    fun setDictionaryAutoFillOnImport(enabled: Boolean) {
+        preferences.edit().putBoolean("dictionary_autofill_on_import", enabled).apply()
+        _dictionaryAutoFillOnImport.value = enabled
     }
 
     fun exportFile(context: Context, uri: Uri, fullBackup: Boolean) = launchOperation {
@@ -196,7 +227,11 @@ class MainViewModel(application: Application, private val savedState: SavedState
 
     fun importText(contents: String) = launchOperation { performImport(contents) }
     private suspend fun performImport(contents: String) {
-                    val summary = repository.importText(contents)
+                    val importedWords = TxtImportParser.parse(contents).words
+                    val suggestedMeanings = if (_dictionaryAutoFillOnImport.value) {
+                        withContext(Dispatchers.IO) { dictionary.lookupAll(importedWords.map { it.word }) }
+                    } else emptyMap()
+                    val summary = repository.importText(contents, suggestedMeanings)
                     _message.value = when {
                         summary.uniqueWords == 0 -> "文件中没有可导入的单词"
                         summary.addedWords == 0 -> "没有新单词，已跳过 ${summary.skippedWords} 个重复项"

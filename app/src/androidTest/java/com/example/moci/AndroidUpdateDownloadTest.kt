@@ -21,7 +21,7 @@ import kotlin.concurrent.thread
 class AndroidUpdateDownloadTest {
     private val context = ApplicationProvider.getApplicationContext<Context>()
     private fun fixture(name: String = "valid") = InstrumentationRegistry.getInstrumentation().context.assets.open("update-$name.apk").use { it.readBytes() }
-    private fun release(bytes: ByteArray, url: String) = ReleaseInfo("v0.3", "测试更新", "update-valid.apk", url, bytes.size.toLong(), sha(bytes), null)
+    private fun release(bytes: ByteArray, url: String) = ReleaseInfo("v0.5", "测试更新", "update-valid.apk", url, bytes.size.toLong(), sha(bytes), null)
     private fun sha(bytes: ByteArray) = MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
     private fun repository() = object : UpdateRepository {
         override suspend fun latest(): ReleaseInfo = error("No public API used in device fixtures")

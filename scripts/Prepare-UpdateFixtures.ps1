@@ -20,8 +20,8 @@ if (-not (Test-Path $wrongKey)) {
 }
 foreach ($kind in @('valid','wrong-package','wrong-signer','old-version')) {
     $package = if ($kind -eq 'wrong-package') { 'com.example.moci.fixture' } else { 'com.example.moci' }
-    $code = if ($kind -eq 'old-version') { 2 } else { 3 }
-    $version = if ($kind -eq 'old-version') { '0.2' } else { '0.3' }
+    $code = if ($kind -eq 'old-version') { 4 } else { 5 }
+    $version = if ($kind -eq 'old-version') { '0.4' } else { '0.5' }
     $manifest = Join-Path $output 'AndroidManifest.xml'
     @"
 <manifest xmlns:android="http://schemas.android.com/apk/res/android" package="$package" android:versionCode="$code" android:versionName="$version">

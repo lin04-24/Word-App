@@ -5,7 +5,7 @@ import java.util.Locale
 data class ParsedImport(val words: List<WordEntity>, val nonEmptyLineCount: Int)
 
 object TxtImportParser {
-    fun parse(contents: String): ParsedImport {
+    fun parse(contents: String, meanings: Map<String, String> = emptyMap()): ParsedImport {
         val unique = LinkedHashMap<String, String>()
         var nonEmptyLineCount = 0
         contents.removePrefix("\uFEFF").lineSequence().forEach { line ->
@@ -16,7 +16,9 @@ object TxtImportParser {
             }
         }
         return ParsedImport(
-            words = unique.map { (key, word) -> WordEntity(normalizedWord = key, word = word) },
+            words = unique.map { (key, word) ->
+                WordEntity(normalizedWord = key, word = word, meaning = meanings[key]?.trim().orEmpty())
+            },
             nonEmptyLineCount = nonEmptyLineCount,
         )
     }
