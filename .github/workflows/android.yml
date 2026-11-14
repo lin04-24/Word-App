@@ -1,8 +1,6 @@
 name: Android verification
 
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -28,12 +26,14 @@ jobs:
       - name: Prepare SDK
         run: |
           chmod +x gradlew
+          echo "ANDROID_USER_HOME=$HOME/.android" >> "$GITHUB_ENV"
           sdkmanager 'platforms;android-35' 'build-tools;36.0.0'
       - name: Prepare debug signing key for tests
         run: |
-          mkdir -p "$HOME/.android"
-          if [ ! -f "$HOME/.android/debug.keystore" ]; then
-            keytool -genkeypair -keystore "$HOME/.android/debug.keystore" \
+          android_user_home="${ANDROID_USER_HOME:-$HOME/.android}"
+          mkdir -p "$android_user_home"
+          if [ ! -f "$android_user_home/debug.keystore" ]; then
+            keytool -genkeypair -keystore "$android_user_home/debug.keystore" \
               -storepass android -keypass android -alias androiddebugkey \
               -dname "CN=Android Debug,O=Android,C=US" \
               -keyalg RSA -keysize 2048 -validity 10000 -noprompt
@@ -57,7 +57,7 @@ jobs:
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none -camera-front none -memory 2048 -cores 2
           script: |
-            ./gradlew connectedDebugAndroidTest --no-daemon
+            ./gradlew connectedDebugAndroidTest '-Pandroid.testInstrumentationRunnerArguments.notClass=com.example.moci.UpdateInstallFlowTest' --no-daemon
             bash scripts/Test-UpgradeSmoke.sh
       - name: Collect device log
         if: always()

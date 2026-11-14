@@ -33,11 +33,11 @@ done
 if [[ "$clicked" != true ]]; then echo 'System install confirmation was not found.' >&2; exit 1; fi
 installed=false
 for attempt in $(seq 1 60); do
-  if adb shell dumpsys package com.example.moci | rg -q 'versionCode=3\b'; then installed=true; break; fi
+  if adb shell dumpsys package com.example.moci | rg -q 'versionCode=5\b'; then installed=true; break; fi
   sleep 1
 done
 if [[ "$installed" != true ]]; then echo 'System installation did not complete.' >&2; exit 1; fi
-echo 'Android system installer successfully upgraded the signed fixture to versionCode 3.'
+echo 'Android system installer successfully upgraded the signed fixture to versionCode 5.'
 # Restore the real debug application so instrumentation can inspect the retained Room database.
 adb install -r -d app/build/outputs/apk/debug/app-debug.apk
 adb shell am instrument -w -e upgradeSmoke true -e class 'com.example.moci.UpdateUpgradeSmokeTest#verifyUpgradeData' "$runner" | tee .test-tools/upgrade-verify.log

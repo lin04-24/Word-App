@@ -16,6 +16,7 @@ import org.junit.Assume.assumeTrue
 import org.junit.Test
 import java.io.File
 import java.security.MessageDigest
+import java.util.regex.Pattern
 
 /** The host script confirms installation outside the target process, which Android replaces. */
 class UpdateUpgradeSmokeTest {
@@ -38,7 +39,7 @@ class UpdateUpgradeSmokeTest {
         AndroidApkVerifier(context).verify(file, release, hash)
         context.startActivity(updateInstallIntent(context, file).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         val device = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
-        assertTrue("System installer should be visible", device.wait(Until.hasObject(By.text("Cancel")), 30_000))
+        assertTrue("System installer should be visible", device.wait(Until.hasObject(By.text(Pattern.compile("(?i)^cancel$"))), 30_000))
     }
 
     @Test fun verifyUpgradeData() = runBlocking {
